@@ -1,4 +1,5 @@
 # Group-3-Commodities-Forecasting
+##Individual work from Jessica Stoker linked below
 ## Business Problem
 Swire’s profitability is greatly affected by fluctuations in commodities pricing. To optimize procurement strategies and inventory management, a more in-depth understanding of Aluminum, Sugar, Cotton, Corn, Coffee, Soybean, and Soybean Oil prices is needed. Historical commodities prices will help us better understand the behavior of these prices over time and allow us to develop accurate forecasting models to help achieve near and long-term business objectives. 
 
