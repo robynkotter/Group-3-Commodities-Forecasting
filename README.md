@@ -6,7 +6,7 @@ Swire’s profitability is greatly affected by fluctuations in commodities prici
 We have explored many different time-series prediction models and evaluated each one for comparison with RMSE as the first hurdle in determining whether each model is effective for these historical commodities’ prices. Our goal has been to select the most appropriate models and produce accurate 3- and 12-month predictions as our final deliverables for this project. 
 
 ## Presentation Materials 
-The exploration of these models is outlined in our Presentation here [hyperlink](https://github.com/robynkotter/Group-3-Commodities-Forecasting/blob/9a55b567d84d3c55bfe8b350f18e7bc37470070b/MSBA_Project_final.pptx) 
+The exploration of these models is outlined in our Presentation here: [Presentation Slide Deck](https://github.com/robynkotter/Group-3-Commodities-Forecasting/blob/9a55b567d84d3c55bfe8b350f18e7bc37470070b/MSBA_Project_final.pptx) 
 
 A complete score sheet for the performance of each model can be found here <hyperlink> 
 
