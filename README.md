@@ -10,7 +10,7 @@ The exploration of these models is outlined in our Presentation here: [Presentat
 
 A complete score sheet for the performance of each model can be found here <hyperlink> 
 
-R code for EDA and ARIMA and SARIMA Models can be found here: (file:///Users/robynkotter/RStudio_Files/Capstone_Kotter_Robyn.html) 
+R code for EDA and ARIMA and SARIMA Models can be found here: [R code](https://github.com/robynkotter/Group-3-Commodities-Forecasting/blob/33c50ea014fb5ae43ccbad2ca38a1b4ff050fdfc/Capstone_Kotter_Robyn.Rmd)
 
 ## Commodity Findings and Conclusion
 
