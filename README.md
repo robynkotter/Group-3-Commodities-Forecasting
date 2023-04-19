@@ -5,14 +5,13 @@ Swire’s profitability is greatly affected by fluctuations in commodities prici
 ## Analytical Objective
 We have explored many different time-series prediction models and evaluated each one for comparison with RMSE as the first hurdle in determining whether each model is effective for these historical commodities’ prices. Our goal has been to select the most appropriate models and produce accurate 3- and 12-month predictions as our final deliverables for this project. 
 
-## Presentation Materials 
-The exploration of these models is outlined in our Presentation here <hyperlink>  
+## Presentation Materials - Individual
 
-A complete score sheet for the performance of each model can be found here <hyperlink> 
+The exploration of these models is outlined in our Presentation here [Final Presentation](https://github.com/robynkotter/Group-3-Commodities-Forecasting/blob/776b18818ccebc4919f9b85d5f2d5c3024e9db2c/MSBA_Project_final.pptx)
 
-R code for EDA and ARIMA and GARCH Models (excluding the LSTM model) can be found here <hyperlink> 
+A complete score sheet for the performance of each model can be found here [Model Comparisons](https://github.com/robynkotter/Group-3-Commodities-Forecasting/blob/776b18818ccebc4919f9b85d5f2d5c3024e9db2c/Model_comparison.xlsx)
 
-Python code for additional EDA plots and the LSTM model can be found here <hyperlink> 
+Individual - Python code for additional EDA plots and the LSTM model can be found here [Individual Python Notebook]()
 
 ## Commodity Findings and Conclusion
 
