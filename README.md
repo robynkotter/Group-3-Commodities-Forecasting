@@ -10,7 +10,7 @@ The exploration of these models is outlined in our Presentation here <hyperlink>
 
 A complete score sheet for the performance of each model can be found here <hyperlink> 
 
-R code for EDA and Models (excluding the LSTM model) can be found here <hyperlink> 
+R code for EDA and ARIMA and GARCH Models (excluding the LSTM model) can be found here <hyperlink> 
 
 Python code for additional EDA plots and the LSTM model can be found here <hyperlink> 
 
