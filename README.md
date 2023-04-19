@@ -10,7 +10,7 @@ The exploration of these models is outlined in our Presentation here: [Presentat
 
 A complete score sheet for the performance of each model can be found here <hyperlink> 
 
-R code for EDA and ARIMA and GARCH Models (excluding the LSTM model) can be found here <hyperlink> 
+R code for EDA and ARIMA and GARCH Models (excluding the LSTM model) can be found here: [R Code] (https://github.com/robynkotter/Group-3-Commodities-Forecasting/blob/c8f5b037de333a1194c93c0ede72dc54af9a75e2/Commodity_forecasting_group.Rmd)
 
 Python code for additional EDA plots and the LSTM model can be found here <hyperlink> 
 
