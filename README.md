@@ -8,7 +8,7 @@ We have explored many different time-series prediction models and evaluated each
 ## Presentation Materials 
 The exploration of these models is outlined in our Presentation here: [Presentation Slide Deck](https://github.com/robynkotter/Group-3-Commodities-Forecasting/blob/9a55b567d84d3c55bfe8b350f18e7bc37470070b/MSBA_Project_final.pptx) 
 
-A complete score sheet for the performance of each model can be found here: <hyperlink> 
+A complete score sheet for the performance of each model can be found here: [Model Comparisons](https://github.com/robynkotter/Group-3-Commodities-Forecasting/blob/9cc2e2c75de8fd66959072a81f987f6158fbfbe3/Model_comparison.xlsx)
 
 R code for EDA and ARIMA and GARCH Models (excluding the LSTM model) can be found here: [R Code](https://github.com/robynkotter/Group-3-Commodities-Forecasting/blob/c8f5b037de333a1194c93c0ede72dc54af9a75e2/Commodity_forecasting_group.Rmd)
 
