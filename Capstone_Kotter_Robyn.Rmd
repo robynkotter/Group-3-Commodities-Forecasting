@@ -1,0 +1,1141 @@
+---
+title: "Capstone_Kotter_Robyn"
+author: "Robyn Kotter"
+date: "March 19, 2023"
+output: 
+  html_document: 
+    highlight: breezedark
+    number_sections: yes
+    toc: yes
+    toc_depth: 3
+    fig_width: 25
+    fig_height: 15
+editor_options: 
+  chunk_output_type: console
+---
+```{r include=TRUE}
+```
+# Business Problem Statement
+Delivering a quality beverage that resonates with customers is the foundation of Swire Coca-Cola’s business.  To maximize profitability, Swire Coca-Cola relies on optimized procurement of raw materials including commodities like aluminum, sugar, coffee, cotton, soybean and soybean oil.  Building an accurate time-series model to forecast the future short-term and long-term prices of key commodities could have a positive impact on Swire’s profitability by guiding Swire’s procurement strategy through effective planning and inventory management.
+```{r message=FALSE, warning=FALSE}
+```
+# Analytic Objective
+Because commodity data is time series data, we suggest exploring time series models including Autoregressive Integrated Moving Average (ARIMA), Seasonal Autoregressive Integrated Moving Average (SARIMA), Error, Trend and Seasonality (ETS) model, Long Short-Term Memory (LSTM), and Generalized Autoregressive Conditional Heteroskedasticity (GARCH) models to forecast key commodity prices for the next 3 months as well as the next year.  Stakeholders can judge the success of the project based upon model metrics including AIC values, standard error metrics, and checking residuals through plotting and Ljung-Box test to assess model fit.  In addition, insight gained by our model could be used in the future to build a dashboard with an ability to simulate various profitability scenarios. 
+```{r message=FALSE, warning=FALSE}
+```
+# EDA - Questions to Consider
+-Is there a seasonality affect on any of the commodity prices?
+-Are there major bumps to the price of commodities triggered by external events?
+-How does the overall trend of commodity prices look?
+-Do we need to consider autocorrelation?
+-Is the data stationary (will need to assess for AIRMA model)?
+```{r message=FALSE, warning=FALSE}
+```
+
+# EDA - Load packages and import data
+```{r message=FALSE, warning=FALSE}
+#Set working directory
+mydir <- getwd()
+setwd("~/RStudio_Files")
+mydir
+
+#Install packages
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(tsibble)
+library(ggplot2)
+library(feasts)
+library(forecast)
+library(tseries)
+library(astsa)
+library(imputeTS)
+
+
+#Import Data
+Cotton <- read.csv(file = "cotton-prices-historical-chart-data.csv", stringsAsFactors = FALSE)
+Coffee <- read.csv(file = "coffee-prices-historical-chart-data.csv", stringsAsFactors = FALSE)
+Corn <- read.csv(file = "corn-prices-historical-chart-data.csv", stringsAsFactors = FALSE)
+SoybeanO <- read.csv(file = "soybean-oil-prices-historical-chart-data.csv", stringsAsFactors = FALSE)
+Soybean <- read.csv(file = "soybean-prices-historical-chart-data.csv", stringsAsFactors = FALSE)
+Sugar <- read.csv(file = "sugar-prices-historical-chart-data.csv", stringsAsFactors = FALSE)
+Alum <- read.csv(file = "Aluminium_end_price.csv", stringsAsFactors = FALSE)
+```
+
+# EDA - Data Preprocessing
+Needed to change column "date" to datetime format in order to run time series and season plots using the feasts and ggplot packages.  We also aggregated the data to provide a monthly average to be able to plot in consistent segments across all years.  
+```{r message=FALSE, warning=FALSE}
+#Format date
+Cotton %>%
+  mutate(date = mdy(date))%>%
+  mutate(month = format_ISO8601(date, precision = "ym")) -> Cotton
+
+Coffee %>%
+  mutate(date = mdy(date))%>%
+  mutate(month = format_ISO8601(date, precision = "ym")) -> Coffee
+
+Corn %>%
+  mutate(date = mdy(date))%>%
+  mutate(month = format_ISO8601(date, precision = "ym")) -> Corn
+
+SoybeanO %>%
+  mutate(date = mdy(date))%>%
+  mutate(month = format_ISO8601(date, precision = "ym")) -> SoybeanO
+
+Soybean %>%
+  mutate(date = mdy(date))%>%
+  mutate(month = format_ISO8601(date, precision = "ym")) -> Soybean
+
+Sugar %>%
+  mutate(date = mdy(date))%>%
+  mutate(month = format_ISO8601(date, precision = "ym")) -> Sugar
+
+Alum %>%
+  mutate(date = mdy(date))%>%
+  mutate(month = format_ISO8601(date, precision = "ym")) -> Alum
+ 
+#Aggregate by monthly average
+Cotton %>%
+  group_by(month) %>% mutate(mon_avg = mean(value))%>%
+  dplyr::select(month, mon_avg) -> Cotton_mon
+
+Coffee %>%
+  group_by(month) %>% mutate(mon_avg = mean(value))%>%
+  dplyr::select(month, mon_avg) -> Coffee_mon
+
+Corn %>%
+  group_by(month) %>% mutate(mon_avg = mean(value))%>%
+  dplyr::select(month, mon_avg) -> Corn_mon
+
+SoybeanO %>%
+  group_by(month) %>% mutate(mon_avg = mean(value))%>%
+  dplyr::select(month, mon_avg) -> SoybeanO_mon
+
+Soybean %>%
+  group_by(month) %>% mutate(mon_avg = mean(value))%>%
+  dplyr::select(month, mon_avg) -> Soybean_mon
+
+Sugar %>%
+  group_by(month) %>% mutate(mon_avg = mean(value))%>%
+  dplyr::select(month, mon_avg) -> Sugar_mon
+
+Alum %>%
+  group_by(month) %>% mutate(mon_avg = mean(value))%>%
+  dplyr::select(month, mon_avg) -> Alum_mon
+
+#Drop duplicate rows - keep monthly average per year 
+Cotton_mon <- Cotton_mon[!duplicated(Cotton_mon), ]
+Coffee_mon <- Coffee_mon[!duplicated(Coffee_mon), ]
+Corn_mon <- Corn_mon[!duplicated(Corn_mon), ]
+SoybeanO_mon <- SoybeanO_mon[!duplicated(SoybeanO_mon), ]
+Soybean_mon <- Soybean_mon[!duplicated(Soybean_mon), ]
+Sugar_mon <- Sugar_mon[!duplicated(Sugar_mon), ]
+Alum_mon <- Alum_mon[!duplicated(Alum_mon), ]
+
+#Format back to date in aggregated month column
+Cotton_mon %>%
+  mutate(month = ym(month)) -> Cotton_mon
+
+Coffee_mon %>%
+  mutate(month = ym(month)) -> Coffee_mon
+
+Corn_mon %>%
+  mutate(month = ym(month)) -> Corn_mon
+
+SoybeanO_mon %>%
+  mutate(month = ym(month)) -> SoybeanO_mon
+
+Soybean_mon %>%
+  mutate(month = ym(month)) -> Soybean_mon
+
+Sugar_mon %>%
+  mutate(month = ym(month)) -> Sugar_mon
+
+Alum_mon %>%
+  mutate(month = ym(month)) -> Alum_mon
+ 
+#Convert to tibble  
+Cotton <- as_tibble(Cotton)  
+Cotton_mon <- as_tibble(Cotton_mon)  
+
+Coffee <- as_tibble(Coffee)  
+Coffee_mon <- as_tibble(Coffee_mon)
+
+Corn <- as_tibble(Corn)  
+Corn_mon <- as_tibble(Corn_mon)
+
+SoybeanO <- as_tibble(SoybeanO)  
+SoybeanO_mon <- as_tibble(SoybeanO_mon)
+
+Soybean <- as_tibble(Soybean)  
+Soybean_mon <- as_tibble(Soybean_mon)
+
+Sugar <- as_tibble(Sugar)  
+Sugar_mon <- as_tibble(Sugar_mon)
+
+Alum <- as_tibble(Alum)  
+Alum_mon <- as_tibble(Alum_mon)
+```
+
+# EDA - Summary of all Commodities
+Pretty consistent range of dates for most of the commodity data with the exception of Aluminium (first year of data is 2002).
+```{r message=FALSE, warning=FALSE}
+#Cotton
+summary(Cotton_mon)
+
+#Coffee
+summary(Coffee_mon)
+
+#Corn
+summary(Corn_mon)
+
+#Soybean Oil
+summary(SoybeanO_mon)
+
+#Soybean
+summary(Soybean_mon)
+
+#Sugar
+summary(Sugar_mon)
+
+#Aluminium
+summary(Alum_mon)
+```
+
+# EDA Plots - Cotton
+Cotton prices have maintained relatively consistent over the past 40 plus years, with the exception of 2011 in which three major world events  -- a drought in China, India's restriction of exports, and floods in Pakistan -- caused a cotton domino effect which led to a steep increase of prices.   
+```{r message=FALSE, warning=FALSE}
+#Cotton time series plot 
+ggplot(data=Cotton, aes(x=date, y=value)) + geom_line() + xlab("Year") + ylab("Cotton prices")
+ggplot(data=Cotton_mon, aes(x=month, y=mon_avg)) + geom_line() + xlab("Year") + ylab("Cotton prices")
+
+#convert data frame into time series tsibble object
+Cotton %>% as_tsibble(index = date) -> Cotton_ts
+Cotton_mon %>% as_tsibble(index = month) -> Cotton_mon_ts
+
+#Format data for Cotton seasonal plots
+Cotton_mon_ts %>%
+  mutate(Month = tsibble::yearmonth(month)) %>%
+  as_tsibble(index = Month) %>%
+  dplyr::select(Month,mon_avg) -> Cotton_sea_ts
+print(Cotton_sea_ts)
+
+#Cotton seasonal plot by month
+autoplot(Cotton_sea_ts, mon_avg) +
+  ylab("monthly Cotton prices") +
+  xlab("")
+
+#Different view Cotton seasonal plot
+Cotton_sea_ts %>% gg_season(mon_avg, labels = "both") + 
+  ylab("Monthly Cotton prices")
+
+#Cotton seasonal subseries plot 
+Cotton_sea_ts %>% gg_subseries(mon_avg) +
+  labs(y = "Cotton prices", title = "Seasonal subseries plot: Cotton prices")
+```
+
+# EDA Plots - Coffee
+There does not appear to be a consistent trend for increasing coffee prices.  Rather, there have been bumps in prices in 1977, 1986, 2011 and 2022 due to weather-related shortages in coffee-growing regions. 
+```{r message=FALSE, warning=FALSE}
+#Coffee time series plot 
+ggplot(data=Coffee, aes(x=date, y=value)) + geom_line() + xlab("Year") + ylab("Coffee prices")
+ggplot(data=Coffee_mon, aes(x=month, y=mon_avg)) + geom_line() + xlab("Year") + ylab("Cooffee prices")
+
+#convert data frame into time series tsibble object
+Coffee %>% as_tsibble(index = date) -> Coffee_ts
+Coffee_mon %>% as_tsibble(index = month) -> Coffee_mon_ts
+
+#Format data for Coffee seasonal plots
+Coffee_mon_ts %>%
+  mutate(Month = tsibble::yearmonth(month)) %>%
+  as_tsibble(index = Month) %>%
+  dplyr::select(Month,mon_avg) -> Coffee_sea_ts
+print(Coffee_sea_ts)
+
+#Coffee seasonal plot by month
+autoplot(Coffee_sea_ts, mon_avg) +
+  ylab("monthly Coffee prices") +
+  xlab("")
+
+#Different view Coffee seasonal plot
+Coffee_sea_ts %>% gg_season(mon_avg, labels = "both") + 
+  ylab("Monthly Coffee prices")
+
+#Coffee seasonal subseries plot 
+Coffee_sea_ts %>% gg_subseries(mon_avg) +
+  labs(y = "Coffee prices", title = "Seasonal subseries plot: Coffee prices")
+```
+
+# EDA Plots - Corn
+Corn appears to have held consistent prices until 2008 when it increased sharply and has maintained that higher price point pretty consistently ever since. 
+```{r message=FALSE, warning=FALSE}
+#Corn time series plot
+ggplot(data=Corn, aes(x=date, y=value)) + geom_line() + xlab("Year") + ylab("Corn prices")
+ggplot(data=Corn_mon, aes(x=month, y=mon_avg)) + geom_line() + xlab("Year") + ylab("Corn prices")
+
+#convert data frame into time series tsibble object
+Corn %>% as_tsibble(index = date) -> Corn_ts
+Corn_mon %>% as_tsibble(index = month) -> Corn_mon_ts
+
+#Format data for Corn seasonal plots
+Corn_mon_ts %>%
+  mutate(Month = tsibble::yearmonth(month)) %>%
+  as_tsibble(index = Month) %>%
+  dplyr::select(Month,mon_avg) -> Corn_sea_ts
+print(Corn_sea_ts)
+
+#Corn seasonal plot by month
+autoplot(Corn_sea_ts, mon_avg) +
+  ylab("monthly Corn prices") +
+  xlab("")
+
+#Different view Corn seasonal plot
+Corn_sea_ts %>% gg_season(mon_avg, labels = "both") + 
+  ylab("Monthly Corn prices")
+
+#Corn seasonal subseries plot 
+Corn_sea_ts %>% gg_subseries(mon_avg) +
+  labs(y = "Corn prices", title = "Seasonal subseries plot: Corn prices")
+```
+
+# EDA Plots - Soybean Oil
+Soybean oil appears to have held consistent prices until 2011 when it increased sharply and has maintained that higher price point pretty consistently ever since.  In 2022, soybean oil prices hit a historic high.  
+```{r message=FALSE, warning=FALSE}
+#Soybean Oil time series plot
+ggplot(data=SoybeanO, aes(x=date, y=value)) + geom_line() + xlab("Year") + ylab("Soybean Oil prices")
+ggplot(data=SoybeanO_mon, aes(x=month, y=mon_avg)) + geom_line() + xlab("Year") + ylab("Soybean Oil prices")
+
+#convert data frame into time series tsibble object
+SoybeanO %>% as_tsibble(index = date) -> SoybeanO_ts
+SoybeanO_mon %>% as_tsibble(index = month) -> SoybeanO_mon_ts
+
+#Format data for Soybean Oil seasonal plots
+SoybeanO_mon_ts %>%
+  mutate(Month = tsibble::yearmonth(month)) %>%
+  as_tsibble(index = Month) %>%
+  dplyr::select(Month,mon_avg) -> SoybeanO_sea_ts
+print(SoybeanO_sea_ts)
+
+#Soybean Oil seasonal plot by month
+autoplot(SoybeanO_sea_ts, mon_avg) +
+  ylab("monthly Soybean Oil prices") +
+  xlab("")
+
+#Different view Soybean Oil seasonal plot
+SoybeanO_sea_ts %>% gg_season(mon_avg, labels = "both") + 
+  ylab("Monthly Soybean Oil prices")
+
+#Soybean Oil seasonal subseries plot 
+SoybeanO_sea_ts %>% gg_subseries(mon_avg) +
+  labs(y = "Soybean Oil prices", title = "Seasonal subseries plot: Soybean Oil prices")
+```
+
+# EDA Plots - Soybean
+Soybean appears to have held consistent prices until 2011 when it increased sharply and has maintained that higher price point pretty consistently ever since.  2012 and 2022 represent historic high prices. 
+```{r message=FALSE, warning=FALSE}
+#Soybean time series plot
+ggplot(data=Soybean, aes(x=date, y=value)) + geom_line() + xlab("Year") + ylab("Soybean prices")
+ggplot(data=Soybean_mon, aes(x=month, y=mon_avg)) + geom_line() + xlab("Year") + ylab("Soybean prices")
+
+#convert data frame into time series tsibble object
+Soybean %>% as_tsibble(index = date) -> Soybean_ts
+Soybean_mon %>% as_tsibble(index = month) -> Soybean_mon_ts
+
+#Format data for Soybean seasonal plots
+Soybean_mon_ts %>%
+  mutate(Month = tsibble::yearmonth(month)) %>%
+  as_tsibble(index = Month) %>%
+  dplyr::select(Month,mon_avg) -> Soybean_sea_ts
+print(Soybean_sea_ts)
+
+#Soybean seasonal plot by month
+autoplot(Soybean_sea_ts, mon_avg) +
+  ylab("monthly Soybean prices") +
+  xlab("")
+
+#Different view Soybean seasonal plot
+Soybean_sea_ts %>% gg_season(mon_avg, labels = "both") + 
+  ylab("Monthly Soybean prices")
+
+#Soybean seasonal subseries plot 
+Soybean_sea_ts %>% gg_subseries(mon_avg) +
+  labs(y = "Soybean prices", title = "Seasonal subseries plot: Soybean prices")
+```
+
+# EDA Plots - Sugar
+Sugar prices seem to be the only commodity we looked at that have lower prices today than at their historic high in 1974 and 1980.  In 1974 a sugar ration was imposed because of limited supply.   
+```{r message=FALSE, warning=FALSE}
+#Sugar time series plot
+ggplot(data=Sugar, aes(x=date, y=value)) + geom_line() + xlab("Year") + ylab("Sugar prices")
+ggplot(data=Sugar_mon, aes(x=month, y=mon_avg)) + geom_line() + xlab("Year") + ylab("Sugar prices")
+
+#convert data frame into time series tsibble object
+Sugar %>% as_tsibble(index = date) -> Sugar_ts
+Sugar_mon %>% as_tsibble(index = month) -> Sugar_mon_ts
+
+#Format data for Sugar seasonal plots
+Sugar_mon_ts %>%
+  mutate(Month = tsibble::yearmonth(month)) %>%
+  as_tsibble(index = Month) %>%
+  dplyr::select(Month,mon_avg) -> Sugar_sea_ts
+print(Sugar_sea_ts)
+
+#Sugar seasonal plot by month
+autoplot(Sugar_sea_ts, mon_avg) +
+  ylab("monthly Sugar prices") +
+  xlab("")
+
+#Different view Sugar seasonal plot
+Sugar_sea_ts %>% gg_season(mon_avg, labels = "both") + 
+  ylab("Monthly Sugar prices")
+
+#Sugar seasonal subseries plot 
+Sugar_sea_ts %>% gg_subseries(mon_avg) +
+  labs(y = "Sugar prices", title = "Seasonal subseries plot: Sugar prices")
+```
+
+# EDA Plots - Aluminium
+Since 2002, Aluminium has held a relatively consistent price with an historic high in 2022.
+```{r message=FALSE, warning=FALSE}
+#Aluminium time series plot
+ggplot(data=Alum, aes(x=date, y=value)) + geom_line() + xlab("Year") + ylab("Aluminium prices")
+ggplot(data=Alum_mon, aes(x=month, y=mon_avg)) + geom_line() + xlab("Year") + ylab("Aluminium prices")
+
+#convert data frame into time series tsibble object
+Alum %>% as_tsibble(index = date) -> Alum_ts
+Alum_mon %>% as_tsibble(index = month) -> Alum_mon_ts
+
+#Format data for Aluminium seasonal plots
+Alum_mon_ts %>%
+  mutate(Month = tsibble::yearmonth(month)) %>%
+  as_tsibble(index = Month) %>%
+  dplyr::select(Month,mon_avg) -> Alum_sea_ts
+print(Alum_sea_ts)
+
+#Aluminium seasonal plot by month
+autoplot(Alum_sea_ts, mon_avg) +
+  ylab("monthly Aluminium prices") +
+  xlab("")
+
+#Different view Aluminium seasonal plot
+Alum_sea_ts %>% gg_season(mon_avg, labels = "both") + 
+  ylab("Monthly Aluminium prices")
+
+#Aluminium seasonal subseries plot 
+Alum_sea_ts %>% gg_subseries(mon_avg) +
+  labs(y = "Aluminium prices", title = "Seasonal subseries plot: Aluminium prices")
+```
+
+# EDA Results
+Initial EDA represented by the above plots, does not point to any significant seasonality for any of the commodities although there does appear to be some indication of trend for corn, soybean oil and soybean.  Going forward, we will need to address the issues of trend and seasonality in order to transform a time series into a stationary series as required by the ARIMA model. Cotton prices have maintained relatively consistent over the past 40 plus years, with the exception of 2011 in which three major world events  -- a drought in China, India's restriction of exports, and floods in Pakistan -- caused a cotton domino effect which led to a steep increase of prices.  There does not appear to be a consistent trend for increasing coffee prices.  Rather, there have been bumps in prices in 1977, 1986, 2011 and 2022 due to weather-related shortages in coffee-growing regions.  Corn appears to have held consistent prices until 2008 when it increased sharply and has maintained that higher price point pretty consistently ever since.  Soybean oil appears to have held consistent prices until 2011 when it increased sharply and has maintained that higher price point pretty consistently ever since.  In 2022, soybean oil prices hit a historic high.  Soybean appears to have held consistent prices until 2011 when it increased sharply and has maintained that higher price point pretty consistently ever since.  2012 and 2022 represent historic high prices.   Sugar prices seem to be the only commodity we looked at that have lower prices today than at their historic high in 1974 and 1980.  In 1974 a sugar ration was imposed because of limited supply.  Finally,  Aluminium has held a relatively consistent price since 2002 with an historic high in 2022.
+
+Overall, our EDA shows high correlation between the various commodities as well as an overall trend of cyclicality rather than seasonality.  In fact, for all of the commodities there tends to be cyclical trends (on average 6 years) of price increases followed by a period of declining prices.  
+```{r message=FALSE, warning=FALSE}
+```
+
+# Modeling - Introduction
+In order to fulfill the requirements of the business problem -- to maximize Swire Coca-Cola's profitability through optimized procurement of raw material commodities -- an accurate time-series model for forecasting future short-term and long-term commodity prices needs to be built. Because commodity data is time series data, we suggest approaching the analytical problem of forecasting commodity prices by exploring time series models including Autoregressive Integrated Moving Average (ARIMA), Seasonal Autoregressive Integrated Moving Average (SARIMA), Error, Trend and Seasonality (ETS) model, Long Short-Term Memory (LSTM), and Generalized Autoregressive Conditional Heteroskedasticity (GARCH) models to forecast key commodity prices for the next year. 
+
+```{r message=FALSE, warning=FALSE}
+```
+
+# Modeling - Additional Data Prepartion
+Additional post-EDA processing was needed to transform the data from a data frame into a time series in order to deploy the ARIMA model.
+```{r message=FALSE, warning=FALSE}
+
+#Additional Pre-processing - Convert data frame to times series
+
+#Cotton
+Cotton_ts_data <- ts(Cotton_mon$mon_avg, start = c(1973), frequency = 12)
+
+#Coffee
+Coffee_ts_data <- ts(Coffee_mon$mon_avg, start = c(1974), frequency = 12)
+
+#Corn
+Corn_ts_data <- ts(Corn_mon$mon_avg, start = c(1969), frequency = 12)
+
+#Soybean Oil
+SoybeanO_ts_data <- ts(SoybeanO_mon$mon_avg, start = c(1969), frequency = 12)
+
+#Soybean
+Soybean_ts_data <- ts(Soybean_mon$mon_avg, start = c(1969), frequency = 12)
+
+#Sugar
+Sugar_ts_data <- ts(Sugar_mon$mon_avg, start = c(1969), frequency = 12)
+
+#Aluminium
+Alum_ts_data <- ts(Alum_mon$mon_avg, start = c(2003), frequency = 12)
+
+```
+# Modeling Process - Candidate Models
+There are several time series models that we explored for forecasting commodity prices, including:
+
+Autoregressive Integrated Moving Average (ARIMA) model: This is a popular model for time series forecasting that involves analyzing and modeling the autocorrelations and moving averages in the time series data. It can be used to forecast both short-term and long-term trends in commodity prices.  This is a good choice for most time series data because it is accurate, flexible (takes seasonality and cyclicality into account) and relatively easy to run.  
+
+Seasonal Autoregressive Integrated Moving Average (SARIMA) model: This is an extension of the ARIMA model that incorporates seasonality into the analysis. It is particularly useful for forecasting commodity prices that exhibit seasonal patterns.  For our data, which is not highly seasonal, it may not offer the best results.
+
+Error, Trend and Seasonality (ETS) model: This is a model that captures both trend and seasonality and is particularly useful in handling noisy data that contains irregularities that might otherwise make forecasting difficult.  Because our data is not highly seasonal, this might not be the most effective model for our purposes.
+
+Long Short-Term Memory (LSTM) model: This is a recurrent neural network (RNN) that is commonly used for time series forecasting.  It is well suited to capture long-term dependencies in the data and is particularly effective for data with heavy seasonality.  
+
+Generalized Autoregressive Conditional Heteroskedasticity (GARCH) model: This is a popular model used often to analyze and forecast financial time series data exhibiting volatility because the model accounts for heteroskedasticity.  Given the volatility and cyclical patterns of our commodity data this might be a good model for accurate forecasting of commodity prices.  
+
+
+```{r message=FALSE, warning=FALSE}
+```
+# Modeling Process - Model Selection, Cross Validation, and Tuning.
+
+For the purposes of this project, I focused my efforts on the ARIMA and SARIMA models while my teammates explored the GARCH, LTSM and ETS models.  In order to select the best ARIMA model, I manually calculated the the order of the ARIMA model (p, d, q), where p is the number of autoregressive terms, d is the number of times the data needs to be differenced to become stationary, and q is the number of moving average terms.
+
+First, the d term is evaluated by testing for stationarity through an augmented Dickey Fuller Test and evaluating the associated p-value.  If the p-value was less than .05, the null hypthosis stating that the series is non-stationary could be rejected and thus no difference score is needed (d=0).  However, if the p-value of the Dickey Fuller Test is greater than .05, first order differencing is necessary to make the series stationary (d=1).
+
+Next, I plotted the autocorrelation function (ACF) and partial autocorrelation function (PACF) of the time series to identify the order of q (number of moving average terms) and p (number of autoregressive terms) in the model.  The ACF and PACF plots associated with the q and p terms allowed for manual tuning of those parameters.  
+
+Finally, I compared the manual ARIMA model with estimated model parameters described above to an Auto ARIMA model that automatically chooses the best p,d,q values and compared model fit by evaluating total AIC score (lower AIC score is better) as well as running a Ljung-Box test to test for white noise as a method of cross-validation of model performance. A Ljung-Box test's null hypothesis states that the chosen model does not exhibit lack of fit.  Therefore, Ljung-Box p-value greater than .05 shows that we cannot reject the null hypothesis that the model is not exhibiting a lack of fit. A p values less than a threshold like 0.05 means we can reject the null hypothesis. Thus, model errors are autocorrelated making it difficult to trust the model output (a large Ljung-Box p-value shows good model fit).
+
+For the SARIMA model, I followed the same procedure as the auto ARIMA model; however, I added additional seasonal terms to the model to capture and model any seasonal patterns in the data.  For all commodities, the AIC and standard error metrics for the SARIMA models were higher than the the ARIMA models, indicating that the model fit is better when not accounting for seasonality.  This is not a surprising result considering that the data is not highly seasonal.     
+
+```{r message=FALSE, warning=FALSE}
+```
+# Modeling Process - Model performance
+
+A good ARIMA model should accurately forecast values of a time series with low forecasting errors.  Additionally, the model should provide adequate fit by fitting the historical data well, capturing the patterns, trends, and seasonality in the data. This can be assessed by examining the residuals of the model, which should be white noise with no significant autocorrelation (Ljung-Box Test).  Also, the best ARIMA models can be assessed by a lower AIC score.  
+
+In the ARIMA models I ran, in the cases of Coffee and Corn, both manual tuning of the parameters as well as auto tuning resulted in both ARIMA models failing to pass the Ljung-Box test for good model fit which is concerning and an indication that an ARIMA forecasting model may not work well for the Coffee and Corn data.  However, both the manual and auto ARIMA models for Soybean Oil and Soybean prices resulted in passing of the Ljung-Box test and low AIC values.  These seemed to be the best performing models within the ARIMA scope tested.  
+
+For all commodities, the SARIMA model did not perform as well as the ARIMA model based on AIC, RSME and MAE due to the fact that the data was not highly seasonal.  Similarly, my teammates found lackluster AIC, RSME and MAE results when employing the ETS and LSTM models which also tend to preform better on seasonal data.
+
+For all the models my team tested, we found the best AIC, BIC, RMSE and MAE results with the GARCH model which takes heteroskedasticity into account and provided the best fit given the volitality in commodity prices especially in recent years.
+
+```{r message=FALSE, warning=FALSE}
+```
+
+# Modeling - ARIMA - Cotton
+```{r message=FALSE, warning=FALSE}
+
+#Run Augmented Dickey-Fuller Test to test stationarity
+adf.test(Cotton_ts_data, alternative = "stationary") 
+#pvalue 0.01 < .05; can reject null hypothesis that series is non-stationary; no difference score needed to convert to stationary series
+
+#Trend Component (d) = 0 (No first order differencing to make series stationary)
+
+#Moving Average Component (q) estimated by autocorrelation (ACF) plot
+acf(diff(Cotton_ts_data), main='')
+#Per plot q=9
+
+#Auto Regressive Component (p) identified by partial autocorrelation (PACF) plot
+pacf(diff(Cotton_ts_data), main='')
+#Per plot p=4
+
+#Estimation - model Cotton price using ARIMA (p=9, d=0, q=4)
+model_Cotton <- Arima(Cotton_ts_data, order=c(9,0,4))
+summary(model_Cotton) #AIC -1828.46
+
+#Assess Residuals from ARIMA(9,0,4)
+checkresiduals(model_Cotton) 
+#Ljung-Box p-value .5272 > .05; cannot reject null hypothesis that model does not exhibit lack of fit (ie model fits)
+
+#Forecasting future Cotton prices for next 12 months
+Cotton_ARIMA_manual_forecast <- forecast::forecast(model_Cotton, h=12, level=c(80,95))
+autoplot(Cotton_ARIMA_manual_forecast)
+
+#Cross-Validation - Auto Arima - model automatically selects p,d,q 
+auto_Cotton <- auto.arima(Cotton_ts_data)
+summary(auto_Cotton) #AIC -1803.38
+
+#Check Residuals from Auto Arima
+checkresiduals(auto_Cotton) 
+#Ljung-Box pvalue 0.001731 < .05; can reject null hypothesis that model does not exhibit lack of fit (ie model does not fit)
+#Auto Arima model better fit than manual model
+
+#Forecasting future Cotton prices from Auto Arima
+Cotton_ARIMA_auto_forecast <- forecast::forecast(auto_Cotton, h=12, level=c(80,95))
+autoplot(Cotton_ARIMA_auto_forecast)
+
+```
+
+# Modeling - ARIMA - Coffee
+```{r message=FALSE, warning=FALSE}
+
+#Run Augmented Dickey-Fuller Test to test stationarity
+adf.test(Coffee_ts_data, alternative = "stationary") 
+#pvalue is 0.01 < .05; can reject null hypothesis that series is non-stationary; no difference score needed to convert to stationary series
+
+#Trend Component (d) = 0 (No first order differencing to make series stationary)
+
+#Moving Average Component (q) estimated by autocorrelation (ACF) plot
+acf(diff(Coffee_ts_data), main='')
+#Per plot q=7
+
+#Auto Regressive Component (p) identified by partial autocorrelation (PACF) plot
+pacf(diff(Coffee_ts_data), main='')
+#Per plot p=6
+
+#Estimation - model Coffee price using ARIMA (p=6, d=0, q=7)
+model_Coffee <- Arima(Coffee_ts_data, order=c(6,0,7))
+summary(model_Coffee) #AIC -876.66
+
+#Assess Residuals from ARIMA(3,1,5)
+checkresiduals(model_Coffee) 
+#Ljung-Box pvalue 0.048 < .05; can reject null hypothesis that model does not exhibit lack of fit (ie model doesn't fit)
+
+#Forecasting future Coffee prices for next 12 months
+Coffee_ARIMA_manual_forecast <- forecast::forecast(model_Coffee, h=12, level=c(80,95))
+autoplot(Coffee_ARIMA_manual_forecast)
+
+#Cross-Validation - Auto Arima - model automatically selects p,d,q 
+auto_Coffee <- auto.arima(Coffee_ts_data)
+summary(auto_Coffee) #AIC -865.91
+
+#Check Residuals from Auto Arima
+checkresiduals(auto_Coffee) 
+#Ljung-Box pvalue 0.02105 < .05; can reject null hypothesis that model does not exhibit lack of fit (ie model doesn't fit)
+
+#Forecasting future Coffee prices from Auto Arima
+Coffee_ARIMA_auto_forecast <- forecast::forecast(model_Coffee, h=12, level=c(80,95))
+autoplot(Coffee_ARIMA_auto_forecast)
+```
+
+# Modeling - ARIMA - Corn
+```{r message=FALSE, warning=FALSE}
+
+#Run Augmented Dickey-Fuller Test to test stationarity
+adf.test(Corn_ts_data, alternative = "stationary") 
+#pvalue 0.3176 > .05; cannot reject null hypothesis that series is non-stationary; difference score needed to convert to stationary series
+
+adf.test(diff(Corn_ts_data), alternative = "stationary") 
+#Trend Component (d) = 1 (First order differencing needed to make series stationary)
+
+#Moving Average Component (q) estimated by autocorrelation (ACF) plot
+acf(diff(Corn_ts_data), main='')
+#Per plot q=5
+
+#Auto Regressive Component (p) identified by partial autocorrelation (PACF) plot
+pacf(diff(Corn_ts_data), main='')
+#Per plot p=3
+
+#Estimation - model Corn price using ARIMA (p=3, d=1, q=5)
+model_Corn <- Arima(Corn_ts_data, order=c(3,1,5))
+summary(model_Corn) #AIC -99.67
+
+#Assess Residuals from ARIMA(3,1,5)
+checkresiduals(model_Corn) 
+#Ljung-Box pvalue 0.008221 < .05; can reject null hypothesis that model does not exhibit lack of fit (ie model doesn't fit)
+
+#Forecasting future Corn prices for next 12 months
+Corn_ARIMA_manual_forecast <- forecast::forecast(model_Corn, h=12, level=c(80,95))
+autoplot(Corn_ARIMA_manual_forecast)
+
+#Cross-Validation - Auto Arima - model automatically selects p,d,q 
+auto_Corn <- auto.arima(Corn_ts_data)
+summary(auto_Corn) #AIC -89.45
+
+#Check Residuals from Auto Arima
+checkresiduals(auto_Corn) 
+#Ljung-Box pvalue 0.007393 < .05; can reject null hypothesis that model does not exhibit lack of fit (ie model doesn't fit)
+
+#Forecasting future Corn prices from Auto Arima
+Corn_ARIMA_auto_forecast <- forecast::forecast(auto_Corn, h=12, level=c(80,95))
+autoplot(Corn_ARIMA_auto_forecast)
+```
+
+# Modeling - ARIMA - Soybean Oil
+```{r message=FALSE, warning=FALSE}
+
+#Run Augmented Dickey-Fuller Test to test stationarity
+adf.test(SoybeanO_ts_data, alternative = "stationary") 
+#pvalue 0.3381 > .05; cannot reject null hypothesis that series is non-stationary; difference score needed to convert to stationary series
+
+adf.test(diff(SoybeanO_ts_data), alternative = "stationary") 
+#Trend Component (d) = 1 (First order differencing needed to make series stationary)
+
+#Moving Average Component (q) estimated by autocorrelation (ACF) plot
+acf(diff(SoybeanO_ts_data), main='')
+#Per plot q=4
+
+#Auto Regressive Component (p) identified by partial autocorrelation (PACF) plot
+pacf(diff(SoybeanO_ts_data), main='')
+#Per plot p=3
+
+#Estimation - model Soybean Oil price using ARIMA (p=3, d=1, q=4)
+model_SoybeanO <- Arima(SoybeanO_ts_data, order=c(3,1,4))
+summary(model_SoybeanO) #AIC -3285.73
+
+#Assess Residuals from ARIMA(3,1,4)
+checkresiduals(model_SoybeanO) 
+#Ljung-Box pvalue 0.06396 > .05; cannot reject null hypothesis that model does not exhibit lack of fit (ie model fits)
+
+#Forecasting future Soybean Oil prices for next 12 months
+SoybeanO_ARIMA_manual_forecast <- forecast::forecast(model_SoybeanO, h=12, level=c(80,95))
+autoplot(SoybeanO_ARIMA_manual_forecast)
+
+#Cross-Validation - Auto Arima - model automatically selects p,d,q 
+auto_SoybeanO <- auto.arima(SoybeanO_ts_data)
+summary(auto_SoybeanO) #AIC -3281.1
+
+#Check Residuals from Auto Arima
+checkresiduals(auto_SoybeanO) 
+#Ljung-Box pvalue 0.1074 > .05; cannot reject null hypothesis that model does not exhibit lack of fit (ie model fits)
+
+#Forecasting future Soybean Oil prices from Auto Arima
+SoybeanO_ARIMA_auto_forecast <- forecast::forecast(auto_SoybeanO, h=12, level=c(80,95))
+autoplot(SoybeanO_ARIMA_auto_forecast)
+```
+
+# Modeling - ARIMA - Soybean
+```{r message=FALSE, warning=FALSE}
+
+#Run Augmented Dickey-Fuller Test to test stationarity
+adf.test(Soybean_ts_data, alternative = "stationary") 
+#pvalue 0.3002 > .05; cannot reject null hypothesis that series is non-stationary; difference score needed to convert to stationary series
+
+adf.test(diff(Soybean_ts_data), alternative = "stationary") 
+#Trend Component (d) = 1 (First order differencing needed to make series stationary)
+
+#Moving Average Component (q) estimated by autocorrelation (ACF) plot
+acf(diff(Soybean_ts_data), main='')
+#Per plot q=6
+
+#Auto Regressive Component (p) identified by partial autocorrelation (PACF) plot
+pacf(diff(Soybean_ts_data), main='')
+#Per plot p=2
+
+#Estimation - model Soybean price using ARIMA (p=2, d=1, q=6)
+model_Soybean <- Arima(Soybean_ts_data, order=c(2,1,6))
+summary(model_Soybean) #AIC 920.6
+
+#Assess Residuals from ARIMA(2,1,6)
+checkresiduals(model_Soybean) 
+#Ljung-Box pvalue 0.1336 > .05; cannot reject null hypothesis that model does not exhibit lack of fit (ie model fits)
+
+#Forecasting future Soybean prices for next 12 months
+Soybean_ARIMA_manual_forecast <- forecast::forecast(model_Soybean, h=12, level=c(80,95))
+autoplot(Soybean_ARIMA_manual_forecast)
+
+#Cross-Validation - Auto Arima - model automatically selects p,d,q 
+auto_Soybean <- auto.arima(Soybean_ts_data)
+summary(auto_Soybean) #AIC 918.06
+
+#Check Residuals from Auto Arima
+checkresiduals(auto_Soybean) 
+#Ljung-Box pvalue 0.1557 > .05; cannot reject null hypothesis that model does not exhibit lack of fit (ie model fits)
+
+#Forecasting future Soybean prices from Auto Arima
+Soybean_ARIMA_auto_forecast <- forecast::forecast(auto_Soybean, h=12, level=c(80,95))
+autoplot(Soybean_ARIMA_auto_forecast)
+```
+
+# Modeling - ARIMA - Sugar
+```{r message=FALSE, warning=FALSE}
+
+#Run Augmented Dickey-Fuller Test to test stationarity
+adf.test(Sugar_ts_data, alternative = "stationary") 
+#pvalue 0.01 < .05; can reject null hypothesis that series is non-stationary; no difference score needed to convert to stationary series
+
+#Trend Component (d) = 0 (No first order differencing to make series stationary)
+
+#Moving Average Component (q) estimated by autocorrelation (ACF) plot
+acf(diff(Sugar_ts_data), main='')
+#Per plot q=7
+
+#Auto Regressive Component (p) identified by partial autocorrelation (PACF) plot
+pacf(diff(Sugar_ts_data), main='')
+#Per plot p=6
+
+#Estimation - model Sugar price using ARIMA (p=6, d=0, q=7)
+model_Sugar <- Arima(Sugar_ts_data, order=c(6,0,7))
+summary(model_Sugar) #AIC -3546.75
+
+#Assess Residuals from ARIMA(6,0,7)
+checkresiduals(model_Sugar) 
+#Ljung-Box pvalue 0.2668 > .05; cannot reject null hypothesis that model does not exhibit lack of fit (ie model fits)
+
+#Forecasting future Sugar prices for next 12 months
+Sugar_ARIMA_manual_forecast <- forecast::forecast(model_Sugar, h=12, level=c(80,95))
+autoplot(Sugar_ARIMA_manual_forecast)
+
+#Cross-Validation - Auto Arima - model automatically selects p,d,q 
+auto_Sugar <- auto.arima(Sugar_ts_data)
+summary(auto_Sugar) #AIC -3523.96
+
+#Check Residuals from Auto Arima
+checkresiduals(auto_Sugar) 
+#Ljung-Box pvalue 0.007154 < .05; can reject null hypothesis that model does not exhibit lack of fit (ie model doesn't fit)
+
+#Forecasting future Sugar prices from Auto Arima
+Sugar_ARIMA_auto_forecast <- forecast::forecast(auto_Sugar, h=12, level=c(80,95))
+autoplot(Sugar_ARIMA_auto_forecast)
+```
+
+# Modeling - ARIMA - Aluminium
+```{r message=FALSE, warning=FALSE}
+
+#Run Augmented Dickey-Fuller Test to test stationarity
+adf.test(Alum_ts_data, alternative = "stationary") 
+#pvalue 0.1635 < .05; cannot reject null hypothesis that series is non-stationary; difference score needed to convert to stationary series
+
+adf.test(diff(Alum_ts_data), alternative = "stationary") 
+#Trend Component (d) = 1 (First order differencing needed to make series stationary)
+
+#Moving Average Component (q) estimated by autocorrelation (ACF) plot
+acf(diff(Alum_ts_data), main='')
+#Per plot q=3
+
+#Auto Regressive Component (p) identified by partial autocorrelation (PACF) plot
+pacf(diff(Alum_ts_data), main='')
+#Per plot p=2
+
+#Estimation - model Aluminium price using ARIMA (p=2, d=1, q=3)
+model_Alum <- Arima(Alum_ts_data, order=c(2,1,3))
+summary(model_Alum) #AIC 2992.52 
+
+#Assess Residuals from ARIMA(2,1,3)
+checkresiduals(model_Alum) 
+#Ljung-Box pvalue 0.1004 > .05; cannot reject null hypothesis that model does not exhibit lack of fit (ie model fits)
+
+#Forecasting future Aluminium prices for next 12 months
+Alum_ARIMA_manual_forecast <- forecast::forecast(model_Alum, h=12, level=c(80,95))
+autoplot(Alum_ARIMA_manual_forecast)
+
+#Cross-Validation - Auto Arima - model automatically selects p,d,q 
+auto_Alum <- auto.arima(Alum_ts_data)
+summary(auto_Alum) #AIC 2997.78 
+
+#Check Residuals from Auto Arima
+checkresiduals(auto_Alum) 
+#Ljung-Box pvalue 0.2562 < .05; cannot reject null hypothesis that model does not exhibit lack of fit (ie model fits)
+
+#Forecasting future Aluminium prices from Auto Arima
+Alum_ARIMA_auto_forecast <- forecast::forecast(auto_Alum, h=12, level=c(80,95))
+autoplot(Alum_ARIMA_auto_forecast)
+```
+
+# Modeling - SARIMA - Cotton
+```{r message=FALSE, warning=FALSE}
+library(tidyquant)
+library(gridExtra)
+library(tibbletime)
+library(itsmr)
+library(here)
+library(fpp2)
+knitr::opts_chunk$set(comment=NA,tidy=FALSE)
+
+
+#Estimate seasonal component of data
+Cotton_ts_decomp = stl(Cotton_ts_data,s.window=12) # estimate the seasonal component
+Cotton_ts_adjseason = Cotton_ts_data - seasonal(Cotton_ts_decomp) # deseason the data
+autoplot(Cotton_ts_adjseason) # plot
+
+ggAcf(Cotton_ts_adjseason) # ACF
+ggPacf(Cotton_ts_adjseason) # PACF
+
+#Run Augmented Dickey-Fuller Test to test stationarity
+adf.test(Cotton_ts_adjseason)
+#pvalue 0.01 < .05; can reject null hypothesis that series is non-stationary; no difference score needed to convert to stationary series
+
+#SARIMA model
+Cotton_SARIMA = auto.arima(Cotton_ts_data,
+                              stepwise=FALSE,
+                              approximation=FALSE,
+                              seasonal=TRUE, # This will extent to SARIMA
+                              allowdrift=FALSE, 
+                              trace=TRUE)
+summary(Cotton_SARIMA)
+
+#SARIMA Forecast
+Cotton_SARIMA_forecast <- forecast::forecast(Cotton_SARIMA, h=12, level=c(80,95))
+autoplot(Cotton_SARIMA_forecast)
+
+```
+
+# Modeling - SARIMA - Coffee
+```{r message=FALSE, warning=FALSE}
+
+#Estimate seasonal component of data
+Coffee_ts_decomp = stl(Coffee_ts_data,s.window=12) # estimate the seasonal component
+Coffee_ts_adjseason = Coffee_ts_data - seasonal(Cotton_ts_decomp) # deseason the data
+autoplot(Coffee_ts_adjseason) # plot
+
+ggAcf(Coffee_ts_adjseason) # ACF
+ggPacf(Coffee_ts_adjseason) # PACF
+
+#Run Augmented Dickey-Fuller Test to test stationarity
+adf.test(Coffee_ts_adjseason)
+#pvalue 0.01 < .05; can reject null hypothesis that series is non-stationary; no difference score needed to convert to stationary series
+
+#SARIMA model
+Coffee_SARIMA = auto.arima(Coffee_ts_data,
+                              stepwise=FALSE,
+                              approximation=FALSE,
+                              seasonal=TRUE, # This will extent to SARIMA
+                              allowdrift=FALSE, 
+                              trace=TRUE)
+summary(Coffee_SARIMA)
+
+#SARIMA Forecast
+Coffee_SARIMA_forecast <- forecast::forecast(Coffee_SARIMA, h=12, level=c(80,95))
+autoplot(Coffee_SARIMA_forecast)
+
+```
+
+# Modeling - SARIMA - Corn
+```{r message=FALSE, warning=FALSE}
+
+#Estimate seasonal component of data
+Corn_ts_decomp = stl(Corn_ts_data,s.window=12) # estimate the seasonal component
+Corn_ts_adjseason = Corn_ts_data - seasonal(Corn_ts_decomp) # deseason the data
+autoplot(Corn_ts_adjseason) # plot
+
+ggAcf(Corn_ts_adjseason) # ACF
+ggPacf(Corn_ts_adjseason) # PACF
+
+#Run Augmented Dickey-Fuller Test to test stationarity
+adf.test(Corn_ts_adjseason)
+#pvalue 0.01 > .05; cannot reject null hypothesis that series is non-stationary; differencing needed to convert to stationary series
+
+#Differencing to convert to stationary series
+Corn_ts_adjseason_diff = diff(Corn_ts_adjseason,1) # difference once
+autoplot(Corn_ts_adjseason_diff) # plot
+
+#Run Dickey-Fuller Test on differenced data
+adf.test(Corn_ts_adjseason_diff) #pvalue < .05
+
+#SARIMA model
+Corn_SARIMA = auto.arima(Corn_ts_data,
+                              stepwise=FALSE,
+                              approximation=FALSE,
+                              seasonal=TRUE, # This will extent to SARIMA
+                              allowdrift=FALSE, 
+                              trace=TRUE)
+summary(Corn_SARIMA)
+
+#SARIMA Forecast
+Corn_SARIMA_forecast <- forecast::forecast(Corn_SARIMA, h=12, level=c(80,95))
+autoplot(Corn_SARIMA_forecast)
+
+```
+
+# Modeling - SARIMA - Soybean Oil
+```{r message=FALSE, warning=FALSE}
+
+#Estimate seasonal component of data
+SoybeanO_ts_decomp = stl(SoybeanO_ts_data,s.window=12) # estimate the seasonal component
+SoybeanO_ts_adjseason = SoybeanO_ts_data - seasonal(SoybeanO_ts_decomp) # deseason the data
+autoplot(SoybeanO_ts_adjseason) # plot
+
+ggAcf(SoybeanO_ts_adjseason) # ACF
+ggPacf(SoybeanO_ts_adjseason) # PACF
+
+#Run Augmented Dickey-Fuller Test to test stationarity
+adf.test(SoybeanO_ts_adjseason)
+#pvalue 0.01 > .05; cannot reject null hypothesis that series is non-stationary; differencing needed to convert to stationary series
+
+#Differencing to convert to stationary series
+SoybeanO_ts_adjseason_diff = diff(SoybeanO_ts_adjseason,1) # difference once
+autoplot(SoybeanO_ts_adjseason_diff) # plot
+
+#Run Dickey-Fuller Test on differenced data
+adf.test(SoybeanO_ts_adjseason_diff) #pvalue < .05
+
+#SARIMA model
+SoybeanO_SARIMA = auto.arima(SoybeanO_ts_data,
+                              stepwise=FALSE,
+                              approximation=FALSE,
+                              seasonal=TRUE, # This will extent to SARIMA
+                              allowdrift=FALSE, 
+                              trace=TRUE)
+summary(SoybeanO_SARIMA)
+
+#SARIMA Forecast
+SoybeanO_SARIMA_forecast <- forecast::forecast(SoybeanO_SARIMA, h=12, level=c(80,95))
+autoplot(SoybeanO_SARIMA_forecast)
+
+```
+
+# Modeling - SARIMA - Soybean
+```{r message=FALSE, warning=FALSE}
+
+#Estimate seasonal component of data
+Soybean_ts_decomp = stl(Soybean_ts_data,s.window=12) # estimate the seasonal component
+Soybean_ts_adjseason = Soybean_ts_data - seasonal(Soybean_ts_decomp) # deseason the data
+autoplot(Soybean_ts_adjseason) # plot
+
+ggAcf(Soybean_ts_adjseason) # ACF
+ggPacf(Soybean_ts_adjseason) # PACF
+
+#Run Augmented Dickey-Fuller Test to test stationarity
+adf.test(Soybean_ts_adjseason)
+#pvalue 0.01 > .05; cannot reject null hypothesis that series is non-stationary; differencing needed to convert to stationary series
+
+#Differencing to convert to stationary series
+Soybean_ts_adjseason_diff = diff(Soybean_ts_adjseason,1) # difference once
+autoplot(Soybean_ts_adjseason_diff) # plot
+
+#Run Dickey-Fuller Test on differenced data
+adf.test(Soybean_ts_adjseason_diff) #pvalue < .05
+
+#SARIMA model
+Soybean_SARIMA = auto.arima(Soybean_ts_data,
+                              stepwise=FALSE,
+                              approximation=FALSE,
+                              seasonal=TRUE, # This will extent to SARIMA
+                              allowdrift=FALSE, 
+                              trace=TRUE)
+summary(Soybean_SARIMA)
+
+#SARIMA Forecast
+Soybean_SARIMA_forecast <- forecast::forecast(Soybean_SARIMA, h=12, level=c(80,95))
+autoplot(Soybean_SARIMA_forecast)
+
+```
+
+# Modeling - SARIMA - Sugar
+```{r message=FALSE, warning=FALSE}
+
+#Estimate seasonal component of data
+Sugar_ts_decomp = stl(Sugar_ts_data,s.window=12) # estimate the seasonal component
+Sugar_ts_adjseason = Sugar_ts_data - seasonal(Sugar_ts_decomp) # deseason the data
+autoplot(Sugar_ts_adjseason) # plot
+
+ggAcf(Sugar_ts_adjseason) # ACF
+ggPacf(Sugar_ts_adjseason) # PACF
+
+#Run Augmented Dickey-Fuller Test to test stationarity
+adf.test(Sugar_ts_adjseason)
+#pvalue 0.01 < .05; can reject null hypothesis that series is non-stationary; no difference score needed to convert to stationary series
+
+#SARIMA model
+Sugar_SARIMA = auto.arima(Sugar_ts_data,
+                              stepwise=FALSE,
+                              approximation=FALSE,
+                              seasonal=TRUE, # This will extent to SARIMA
+                              allowdrift=FALSE, 
+                              trace=TRUE)
+summary(Sugar_SARIMA)
+
+#SARIMA Forecast
+Sugar_SARIMA_forecast <- forecast::forecast(Sugar_SARIMA, h=12, level=c(80,95))
+autoplot(Sugar_SARIMA_forecast)
+
+```
+
+# Modeling - SARIMA - Aluminium
+```{r message=FALSE, warning=FALSE}
+
+#Estimate seasonal component of data
+Alum_ts_decomp = stl(Alum_ts_data,s.window=12) # estimate the seasonal component
+Alum_ts_adjseason = Alum_ts_data - seasonal(Alum_ts_decomp) # deseason the data
+autoplot(Alum_ts_adjseason) # plot
+
+ggAcf(Alum_ts_adjseason) # ACF
+ggPacf(Alum_ts_adjseason) # PACF
+
+#Run Augmented Dickey-Fuller Test to test stationarity
+adf.test(Alum_ts_adjseason)
+#pvalue 0.01 > .05; cannot reject null hypothesis that series is non-stationary; differencing needed to convert to stationary series
+
+#Differencing to convert to stationary series
+Alum_ts_adjseason_diff = diff(Alum_ts_adjseason,1) # difference once
+autoplot(Alum_ts_adjseason_diff) # plot
+
+#Run Dickey-Fuller Test on differenced data
+adf.test(Alum_ts_adjseason_diff) #pvalue < .05
+
+#SARIMA model
+Alum_SARIMA = auto.arima(Alum_ts_data,
+                              stepwise=FALSE,
+                              approximation=FALSE,
+                              seasonal=TRUE, # This will extent to SARIMA
+                              allowdrift=FALSE, 
+                              trace=TRUE)
+summary(Alum_SARIMA)
+
+#SARIMA Forecast
+Alum_SARIMA_forecast <- forecast::forecast(Alum_SARIMA, h=12, level=c(80,95))
+autoplot(Alum_SARIMA_forecast)
+
+```
+
+# Modeling - Results
+I tested and ran ARIMA models for all commodities Swire Coca-Cola uses as ingredients in order to forecast prices for the upcoming year to aid in efficient procurement planning and strategy.  The results of the ARIMA models as a forecasting tool were mixed depending on the data set.  For Coffee and Corn, neither the manual tuning of parameters nor the auto ARIMA models resulted in Ljung-Box p-value large enough to provide confidence that the model fits the data well enough.  Therefore, any ARIMA forecasting for this data can be problematic.  However, the rest of the data for Cotton, Soybean Oil, Soybean, Sugar and Aluminum produced results that passed the Ljung-Box test for at least one method of either manual parameter tuning or auto ARMIA tuning.  For Cotton, the manual parameters of ARIMA(p=9, d=0, q=4) produced the lowest AIC value (-1828.46). For Soybean Oil, the manual parameters of ARIMA(p=3, d=1, q=4) produced the lowest AIC value (-3285.73). For Soybean, the Auto ARIMA parameters produced the lowest AIC value (918.06).  For Sugar, the manual parameters of ARIMA(p=6, d=0, q=7) produced the lowest AIC value (-3546.75).  Finally, for Aluminum the manual parameters of ARIMA(p=2, d=1, q=3) produced the lowest AIC value (2992.52).  Overall, the ARIMA model allowed for the most flexibility in parameter selection and allows for additional parameters to account for seasonality (SARIMA) if your data requires it.  This is a good option in times of certainty.  
+
+For all commodities, the SARIMA model did not perform as well as the ARIMA model based on AIC, RSME and MAE due to the fact that the data was not highly seasonal.  Similarly, my teammates found lackluster AIC, RSME and MAE results when employing the ETS and LSTM models which also tend to preform better on seasonal data.
+
+For all the models my team tested, we found the best AIC, BIC, RMSE and MAE results with the GARCH model which takes heteroskedasticity into account and provided the best fit given the volatility in commodity prices especially in recent years.
+
+Based on RMSE, MAE, and the residuals, the ARIMA and GARCH models are our recommendation for accurately predicting commodity prices.  ARIMA is the easiest model to tune, providing a great option for continual analysis and tinkering with different conditions. The GARCH model controls for volatility, providing a solid option for prediction in times of uncertainty. Our recommendation would be to use both models in order to optimize business decisions based on commodity price. 
+
+```{r message=FALSE, warning=FALSE}
+# Summary of all models
+
+#Cotton - summary of models
+summary(model_Cotton) #ARIMA manual parameters
+summary(auto_Cotton) #ARIMA auto parameters
+summary(Cotton_SARIMA) #SARIMA 
+
+#Cotton - forecast plots
+autoplot(Cotton_ARIMA_manual_forecast) + xlim(2016,2024) #ARIMA manual parameters
+autoplot(Cotton_ARIMA_auto_forecast) + xlim(2016,2024) #ARIMA auto parameters
+autoplot(Cotton_SARIMA_forecast) + xlim(2016,2024) #SARIMA
+
+#Coffee - summary of models
+summary(model_Coffee) #ARIMA manual parameters
+summary(auto_Coffee) #ARIMA auto parameters
+summary(Coffee_SARIMA) #SARIMA 
+
+#Coffee - forecast plots
+autoplot(Coffee_ARIMA_manual_forecast) + xlim(2016,2024) #ARIMA manual parameters
+autoplot(Coffee_ARIMA_auto_forecast) + xlim(2016,2024) #ARIMA auto parameters
+autoplot(Coffee_SARIMA_forecast) + xlim(2016,2024) #SARIMA
+
+#Corn - summary of models
+summary(model_Corn) #ARIMA manual parameters
+summary(auto_Corn) #ARIMA auto parameters
+summary(Corn_SARIMA) #SARIMA 
+
+#Corn - forecast plots
+autoplot(Corn_ARIMA_manual_forecast) + xlim(2016,2024) #ARIMA manual parameters
+autoplot(Corn_ARIMA_auto_forecast) + xlim(2016,2024) #ARIMA auto parameters
+autoplot(Corn_SARIMA_forecast) + xlim(2016,2024) #SARIMA
+
+#Soybean Oil - summary of models
+summary(model_SoybeanO) #ARIMA manual parameters
+summary(auto_SoybeanO) #ARIMA auto parameters
+summary(SoybeanO_SARIMA) #SARIMA 
+
+#Soybean Oil - forecast plots
+autoplot(SoybeanO_ARIMA_manual_forecast) + xlim(2016,2024) #ARIMA manual parameters
+autoplot(SoybeanO_ARIMA_auto_forecast) + xlim(2016,2024) #ARIMA auto parameters
+autoplot(SoybeanO_SARIMA_forecast) + xlim(2016,2024) #SARIMA
+
+#Soybean - summary of models
+summary(model_Soybean) #ARIMA manual parameters
+summary(auto_Soybean) #ARIMA auto parameters
+summary(Soybean_SARIMA) #SARIMA 
+
+#Soybean - forecast plots
+autoplot(Soybean_ARIMA_manual_forecast) + xlim(2016,2024) #ARIMA manual parameters
+autoplot(Soybean_ARIMA_auto_forecast) + xlim(2016,2024) #ARIMA auto parameters
+autoplot(Soybean_SARIMA_forecast) + xlim(2016,2024) #SARIMA
+
+#Sugar - summary of models
+summary(model_Sugar) #ARIMA manual parameters
+summary(auto_Sugar) #ARIMA auto parameters
+summary(Sugar_SARIMA) #SARIMA 
+
+#Sugar - forecast plots
+autoplot(Sugar_ARIMA_manual_forecast) + xlim(2016,2024) #ARIMA manual parameters
+autoplot(Sugar_ARIMA_auto_forecast) + xlim(2016,2024) #ARIMA auto parameters
+autoplot(Sugar_SARIMA_forecast) + xlim(2016,2024) #SARIMA
+
+#Aluminium - summary of models
+summary(model_Alum) #ARIMA manual parameters
+summary(auto_Alum) #ARIMA auto parameters
+summary(Alum_SARIMA) #SARIMA 
+
+#Aluminium - forecast plots
+autoplot(Alum_ARIMA_manual_forecast) + xlim(2016,2024) #ARIMA manual parameters
+autoplot(Alum_ARIMA_auto_forecast) + xlim(2016,2024) #ARIMA auto parameters
+autoplot(Alum_SARIMA_forecast) + xlim(2016,2024) #SARIMA
+
+```
